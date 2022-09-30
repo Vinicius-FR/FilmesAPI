@@ -1,5 +1,9 @@
+using FilmesApi.Authorization;
 using FilmesApi.Data;
+using FilmesApi.Services;
 using FilmesAPI.Data;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -9,11 +13,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -32,6 +38,41 @@ namespace FilmesAPI
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddDbContext<AppDbContext>(opts => opts.UseLazyLoadingProxies().UseMySQL(Configuration.GetConnectionString("CinemaConnection")));
+            services.AddAuthentication(auth =>
+            {
+                auth.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                auth.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(token =>
+            {
+                token.RequireHttpsMetadata = false;
+                token.SaveToken = true;
+                token.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes("0asdjas09djsa09djasdjsadajsd09asjd09sajcnzxn")),
+                    ValidateIssuer = false,
+                    ValidateAudience = false,
+                    ClockSkew = TimeSpan.Zero
+                };
+            });
+
+            services.AddAuthorization(options =>
+            {
+                options.AddPolicy("IdadeMinima", policy =>
+                {
+                    policy.Requirements.Add(new IdadeMinimaRequirement(18));
+                });
+            });
+
+            services.AddSingleton<IAuthorizationHandler, IdadeMinimaHandler>();
+
+            services.AddScoped<CinemaService, CinemaService>();
+            services.AddScoped<EnderecoService, EnderecoService>();
+            services.AddScoped<FilmeService, FilmeService>();
+            services.AddScoped<GerenteService, GerenteService>();
+            services.AddScoped<SessaoService, SessaoService>();
             services.AddControllers();
             services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
         }
@@ -47,6 +88,8 @@ namespace FilmesAPI
             app.UseHttpsRedirection();
 
             app.UseRouting();
+
+            app.UseAuthentication();
 
             app.UseAuthorization();
 
